@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: thingspeak
+    description: Secure read-only proxy for ThingSpeak channel data
 paths:
   /healthz:
     get:
@@ -24,6 +26,49 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /thingspeak/feeds:
+    post:
+      operationId: readThingSpeakFeeds
+      tags: [thingspeak]
+      summary: Read a ThingSpeak channel's latest and historical feeds
+      description: Proxies the official ThingSpeak Read API. The optional read key is accepted for this request only and is never stored.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ThingSpeakFeedRequest"
+      responses:
+        "200":
+          description: Channel metadata and available feed entries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ThingSpeakFeedResponse"
+        "400":
+          description: Invalid channel ID or request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Private channel requires a valid read API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Channel or feed data was not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: ThingSpeak could not be reached or returned an error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +78,88 @@ components:
           type: string
       required:
         - status
+    ApiError:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+    ThingSpeakFeedRequest:
+      type: object
+      properties:
+        channelId:
+          type: string
+          minLength: 1
+          maxLength: 32
+        readApiKey:
+          type: string
+          maxLength: 64
+        results:
+          type: integer
+          minimum: 1
+          maximum: 8000
+      required: [channelId]
+    ThingSpeakChannel:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        created_at:
+          type: ["string", "null"]
+        updated_at:
+          type: ["string", "null"]
+        field1:
+          type: ["string", "null"]
+        field2:
+          type: ["string", "null"]
+        field3:
+          type: ["string", "null"]
+        field4:
+          type: ["string", "null"]
+        field5:
+          type: ["string", "null"]
+        field6:
+          type: ["string", "null"]
+        field7:
+          type: ["string", "null"]
+        field8:
+          type: ["string", "null"]
+    ThingSpeakFeed:
+      type: object
+      properties:
+        entry_id:
+          type: integer
+        created_at:
+          type: string
+        field1:
+          type: ["string", "null"]
+        field2:
+          type: ["string", "null"]
+        field3:
+          type: ["string", "null"]
+        field4:
+          type: ["string", "null"]
+        field5:
+          type: ["string", "null"]
+        field6:
+          type: ["string", "null"]
+        field7:
+          type: ["string", "null"]
+        field8:
+          type: ["string", "null"]
+      required: [entry_id, created_at]
+    ThingSpeakFeedResponse:
+      type: object
+      properties:
+        channel:
+          $ref: "#/components/schemas/ThingSpeakChannel"
+        feeds:
+          type: array
+          items:
+            $ref: "#/components/schemas/ThingSpeakFeed"
+      required: [channel, feeds]
 

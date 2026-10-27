@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "CattleCare"
+description = "An IoT-based cattle health monitoring dashboard for Indian dairy farms. Manage prototype sensors and cattle, track clearly labeled live or demo readings, review alerts and BOM components, and connect a ThingSpeak channel securely."
+version = "1.0.0"
+id = "artifacts/cattlecare"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 20064
+
+[services.development]
+run = "pnpm --filter @workspace/cattlecare run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/cattlecare", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/cattlecare/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20064"
+BASE_PATH = "/"
