@@ -147,7 +147,7 @@
 .nav-link:hover { background: #315940; color: #f2f1e7; }
 .nav-active { background: #dce7d0; color: #294b35; font-weight: 700; }
 .nav-active:hover { background: #e4ecd9; color: #294b35; }
-.field-label { display: flex; flex-direction: column; gap: 8px; color: #344d39; font-size: 12px; font-weight: 700; }
+.field-label { display: flex; flex-direction: column; gap: 8px; color: #344d39; font-size: 13px; font-weight: 700; }
 .field-input { display: block; width: 100%; min-height: 46px; border: 1px solid #a9b8a6; border-radius: 10px; background: #fffef9; padding: 10px 12px; color: #203d2c; font-family: var(--app-font-sans); font-size: 14px; outline: none; transition: border-color .16s ease, box-shadow .16s ease; }
 .field-input:focus { border-color: #426f4b; box-shadow: 0 0 0 3px rgba(66, 111, 75, .2); }
 .field-input::placeholder { color: #5f7061; opacity: 1; }
@@ -157,6 +157,7 @@
 .nav-link { color: #d5e1d2; font-size: 13px; font-weight: 600; }
 .nav-active { color: #203e2d; }
 body [class~="text-[9px]"] { font-size: 10px !important; }
+body [class~="text-[10px]"] { font-size: 11px !important; }
 body [class~="text-[#829082]"],
 body [class~="text-[#879287]"],
 body [class~="text-[#839083]"],
