@@ -138,16 +138,63 @@
 @keyframes rise-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 .cl-cardBox { background: #f9f8f0 !important; }
 .cl-formFieldInput::placeholder { color: #738276; opacity: 1; }
+@media (max-width: 767px) {
+  .cl-rootBox, .cl-cardBox, .cl-card { min-width: 0; max-width: 100% !important; }
+  .cl-cardBox { width: 100% !important; }
+}
 .eyebrow { display: inline-flex; align-items: center; gap: 9px; border: 1px solid #dce2d5; border-radius: 999px; background: #faf9f2; padding: 8px 13px; color: #607864; font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
 .nav-link { display: flex; align-items: center; gap: 12px; margin: 2px 0; border-radius: 12px; padding: 11px 14px; color: #c5d3c1; font-size: 12px; font-weight: 500; transition: background .18s ease, color .18s ease; }
 .nav-link:hover { background: #315940; color: #f2f1e7; }
 .nav-active { background: #dce7d0; color: #294b35; font-weight: 700; }
 .nav-active:hover { background: #e4ecd9; color: #294b35; }
-.field-label { display: flex; flex-direction: column; gap: 7px; color: #617163; font-size: 11px; font-weight: 600; }
-.field-input { display: block; width: 100%; min-height: 42px; border: 1px solid #d9dfd3; border-radius: 10px; background: #fffef9; padding: 10px 12px; color: #294633; font-family: var(--app-font-sans); font-size: 12px; outline: none; transition: border-color .16s ease, box-shadow .16s ease; }
-.field-input:focus { border-color: #759477; box-shadow: 0 0 0 3px rgba(112, 145, 112, .13); }
-.field-input::placeholder { color: #9aa397; }
-.field-input.compact { min-height: 34px; border-radius: 8px; padding: 6px 9px; font-size: 11px; }
+.field-label { display: flex; flex-direction: column; gap: 8px; color: #344d39; font-size: 12px; font-weight: 700; }
+.field-input { display: block; width: 100%; min-height: 46px; border: 1px solid #a9b8a6; border-radius: 10px; background: #fffef9; padding: 10px 12px; color: #203d2c; font-family: var(--app-font-sans); font-size: 14px; outline: none; transition: border-color .16s ease, box-shadow .16s ease; }
+.field-input:focus { border-color: #426f4b; box-shadow: 0 0 0 3px rgba(66, 111, 75, .2); }
+.field-input::placeholder { color: #5f7061; opacity: 1; }
+.field-input.compact { min-height: 38px; border-radius: 8px; padding: 7px 9px; font-size: 12px; }
+.field-input:disabled { color: #526553; background: #f1f3ec; }
+:where(a, button, input, select, textarea):focus-visible { outline: 3px solid #426f4b; outline-offset: 2px; }
+.nav-link { color: #d5e1d2; font-size: 13px; font-weight: 600; }
+.nav-active { color: #203e2d; }
+body [class~="text-[9px]"] { font-size: 10px !important; }
+body [class~="text-[#829082]"],
+body [class~="text-[#879287]"],
+body [class~="text-[#839083]"],
+body [class~="text-[#849084]"],
+body [class~="text-[#929c90]"],
+body [class~="text-[#929b90]"],
+body [class~="text-[#899487]"],
+body [class~="text-[#889487]"],
+body [class~="text-[#879285]"],
+body [class~="text-[#8c9689]"],
+body [class~="text-[#8b968a]"],
+body [class~="text-[#8b9589]"],
+body [class~="text-[#8a9588]"],
+body [class~="text-[#869285]"],
+body [class~="text-[#859084]"],
+body [class~="text-[#8c988a]"],
+body [class~="text-[#8c9b8c]"],
+body [class~="text-[#758377]"],
+body [class~="text-[#768477]"],
+body [class~="text-[#778477]"],
+body [class~="text-[#788579]"],
+body [class~="text-[#7d8c7d]"],
+body [class~="text-[#7e8b7c]"],
+body [class~="text-[#7d897c]"],
+body [class~="text-[#7c897b]"],
+body [class~="text-[#7c897c]"],
+body [class~="text-[#7c897d]"],
+body [class~="text-[#7b887a]"],
+body [class~="text-[#7b887b]"],
+body [class~="text-[#748275]"],
+body [class~="text-[#748174]"],
+body [class~="text-[#728073]"],
+body [class~="text-[#718073]"],
+body [class~="text-[#718071]"],
+body [class~="text-[#718171]"],
+body [class~="text-[#718176]"],
+body [class~="text-[#708071]"],
+body [class~="text-[#6e806f]"] { color: #4d624f !important; }
 .skeleton { position: relative; overflow: hidden; border-radius: 12px; background: #e5e9dd; }
 .skeleton::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(255,255,255,.5), transparent); animation: shimmer 1.3s infinite; }
 @keyframes shimmer { to { transform: translateX(100%); } }

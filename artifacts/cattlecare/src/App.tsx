@@ -5,11 +5,11 @@ import { shadcn } from '@clerk/themes';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Link, Redirect, Route, Router as WouterRouter, Switch, useLocation } from 'wouter';
 import {
-  Activity, AlertTriangle, ArrowRight, Boxes, Check, ChevronDown,
+  Activity, AlertTriangle, ArrowRight, Check, ChevronDown,
   CircleHelp, ClipboardList, Cloud, CloudOff, Cpu, HeartPulse, LayoutDashboard, Leaf, LogOut,
   Menu, Plus, RefreshCw, Settings, ShieldCheck, SlidersHorizontal, Thermometer, Trash2, Wifi,
   X, Users, Pencil, Cable, Clock3, Radio, Stethoscope, ChevronRight, BookOpen, CalendarDays,
-  BatteryCharging, Compass, Wind,
+  MapPin,
 } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from 'recharts';
 import {
@@ -27,12 +27,13 @@ const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 const clerkPubKey = publishableKeyFromHost(window.location.hostname, import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
 
-type BomItem = { id: string; name: string; purpose: string; quantity: number; connection: string; status: 'planned' | 'available' | 'connected' };
 type Sensor = { id: string; name: string; type: string; sensorId: string; animalId: string; measurementType: string; unit: string; normalMin: number; normalMax: number; thresholdsConfigured?: boolean; criticalMin?: number; criticalMax?: number; thingSpeakField: string; connectionStatus: 'planned' | 'connected' };
 type Cattle = { id: string; cattleId: string; name: string; breed: string; age: number };
-type FieldMapping = { label: string; unit: string };
-type FarmConfig = { channelId: string; autoRefreshEnabled: boolean; refreshSeconds: number; mappings: Record<string, FieldMapping> };
-type FarmData = { bom: BomItem[]; sensors: Sensor[]; cattle: Cattle[]; config: FarmConfig };
+type FarmLocation = { farmName: string; address: string; village: string; district: string; state: string; postalCode: string; latitude: string; longitude: string };
+type FarmConfig = { channelId: string; autoRefreshEnabled: boolean; refreshSeconds: number };
+type FarmData = { sensors: Sensor[]; cattle: Cattle[]; location: FarmLocation; config: FarmConfig };
+
+const blankLocation: FarmLocation = { farmName: '', address: '', village: '', district: '', state: '', postalCode: '', latitude: '', longitude: '' };
 
 function apiErrorMessage(error: unknown) {
   if (typeof error === 'string' && error.trim()) return error;
@@ -79,30 +80,7 @@ function blankSensor(): Sensor {
   return { id: '', name: '', type: '', sensorId: '', animalId: '', measurementType: '', unit: '', normalMin: 0, normalMax: 0, thresholdsConfigured: false, criticalMin: undefined, criticalMax: undefined, thingSpeakField: '', connectionStatus: 'planned' };
 }
 
-function bomIcon(name: string) {
-  const normalized = name.toLowerCase();
-  if (normalized.includes('esp32')) return Cpu;
-  if (normalized.includes('ds18b20')) return Thermometer;
-  if (normalized.includes('max30102')) return Activity;
-  if (normalized.includes('mpu6050')) return Compass;
-  if (normalized.includes('dht22')) return Wind;
-  if (normalized.includes('jumper')) return Cable;
-  if (normalized.includes('breadboard')) return ClipboardList;
-  if (normalized.includes('power') || normalized.includes('battery')) return BatteryCharging;
-  return Boxes;
-}
-
 const initialData: FarmData = {
-  bom: [
-    { id: 'bom-1', name: 'ESP32 development board', purpose: 'Reads sensors and publishes channel fields', quantity: 1, connection: 'Wi-Fi · 2.4 GHz', status: 'available' },
-    { id: 'bom-2', name: 'DS18B20 temperature probe', purpose: 'Body-temperature prototype input', quantity: 2, connection: 'One-wire · GPIO 4', status: 'planned' },
-    { id: 'bom-3', name: 'MAX30102 pulse sensor', purpose: 'Optical pulse measurement study', quantity: 1, connection: 'I²C · SDA 21 / SCL 22', status: 'planned' },
-    { id: 'bom-4', name: 'Power supply / rechargeable battery', purpose: 'Portable power for the wearable unit', quantity: 1, connection: 'USB-C, 5 V', status: 'planned' },
-    { id: 'bom-5', name: 'MPU6050 motion sensor', purpose: 'Accelerometer and gyroscope input for activity experiments', quantity: 1, connection: 'I²C · SDA 21 / SCL 22', status: 'planned' },
-    { id: 'bom-6', name: 'DHT22 temperature & humidity sensor', purpose: 'Environment temperature and humidity measurement', quantity: 1, connection: 'Digital · GPIO 15', status: 'planned' },
-    { id: 'bom-7', name: 'Jumper wires', purpose: 'Temporary wiring for sensor and board connections', quantity: 1, connection: 'Male-to-female set', status: 'planned' },
-    { id: 'bom-8', name: 'Breadboard', purpose: 'Solderless assembly and circuit prototyping', quantity: 1, connection: 'Solderless board', status: 'planned' },
-  ],
   sensors: [
     { id: 'sensor-1', name: 'Temperature probe A', type: 'DS18B20', sensorId: 'TEMP-01', animalId: 'cow-1', measurementType: 'Body temperature', unit: '°C', normalMin: 0, normalMax: 0, thresholdsConfigured: false, thingSpeakField: 'field1', connectionStatus: 'planned' },
     { id: 'sensor-2', name: 'Pulse sensor', type: 'MAX30102', sensorId: 'PULSE-01', animalId: 'cow-2', measurementType: 'Pulse rate', unit: 'bpm', normalMin: 0, normalMax: 0, thresholdsConfigured: false, thingSpeakField: 'field2', connectionStatus: 'planned' },
@@ -112,31 +90,21 @@ const initialData: FarmData = {
     { id: 'cow-2', cattleId: 'CC-207', name: 'Malli', breed: 'Sahiwal', age: 3 },
     { id: 'cow-3', cattleId: 'CC-311', name: 'Kaveri', breed: 'Jersey cross', age: 4 },
   ],
+  location: { ...blankLocation },
   config: {
     channelId: '',
     autoRefreshEnabled: true,
     refreshSeconds: 30,
-    mappings: {
-      field1: { label: 'Body temperature', unit: '°C' },
-      field2: { label: 'Pulse rate', unit: 'bpm' },
-      field3: { label: 'Activity', unit: 'steps' },
-      field4: { label: 'Humidity', unit: '%' },
-      field5: { label: 'Field 5', unit: '' },
-      field6: { label: 'Field 6', unit: '' },
-      field7: { label: 'Field 7', unit: '' },
-      field8: { label: 'Field 8', unit: '' },
-    },
   },
 };
 const emptyData: FarmData = {
-  bom: [],
   sensors: [],
   cattle: [],
+  location: { ...blankLocation },
   config: {
     channelId: '',
     autoRefreshEnabled: true,
     refreshSeconds: 30,
-    mappings: Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`field${i + 1}`, { label: `Field ${i + 1}`, unit: '' }])) as Record<string, FieldMapping>,
   },
 };
 
@@ -151,10 +119,11 @@ function useFarmData() {
         ...parsed,
         cattle: Array.isArray(parsed.cattle) ? parsed.cattle.map((animal) => ({ ...animal, cattleId: animal.cattleId || '' })) : [],
         sensors: Array.isArray(parsed.sensors) ? parsed.sensors.map((sensor) => ({ ...sensor, thresholdsConfigured: sensor.thresholdsConfigured ?? false })) : [],
+        location: { ...emptyData.location, ...parsed.location },
         config: {
-          ...emptyData.config,
-          ...parsed.config,
-          mappings: { ...emptyData.config.mappings, ...parsed.config?.mappings },
+          channelId: parsed.config?.channelId || '',
+          autoRefreshEnabled: parsed.config?.autoRefreshEnabled ?? true,
+          refreshSeconds: parsed.config?.refreshSeconds ?? 30,
         },
       };
     } catch { return emptyData; }
@@ -281,12 +250,12 @@ function AppRoutes() {
         <Route path="/dashboard" component={() => <ProtectedRoute farm={farm}><Dashboard data={farm.data} update={farm.update} sampleWorkspace={farm.sampleWorkspace} /></ProtectedRoute>} />
         <Route path="/live" component={() => <ProtectedRoute farm={farm}><LivePage data={farm.data} feed={farm.feed} setFeed={farm.setFeed} readApiKey={farm.readApiKey} /></ProtectedRoute>} />
         <Route path="/thingspeak" component={() => <ProtectedRoute farm={farm}><ThingSpeakPage data={farm.data} update={farm.update} feed={farm.feed} setFeed={farm.setFeed} readApiKey={farm.readApiKey} setReadApiKey={farm.setReadApiKey} /></ProtectedRoute>} />
-        <Route path="/bom" component={() => <ProtectedRoute farm={farm}><BomPage data={farm.data} update={farm.update} /></ProtectedRoute>} />
         <Route path="/sensors" component={() => <ProtectedRoute farm={farm}><SensorsPage data={farm.data} update={farm.update} /></ProtectedRoute>} />
         <Route path="/cattle" component={() => <ProtectedRoute farm={farm}><CattlePage data={farm.data} update={farm.update} feed={farm.feed} /></ProtectedRoute>} />
         <Route path="/alerts" component={() => <ProtectedRoute farm={farm}><AlertsPage data={farm.data} feed={farm.feed} /></ProtectedRoute>} />
         <Route path="/about" component={() => <ProtectedRoute farm={farm}><AboutPage /></ProtectedRoute>} />
         <Route path="/settings" component={() => <ProtectedRoute farm={farm}><SettingsPage data={farm.data} update={farm.update} /></ProtectedRoute>} />
+        <Route path="/location" component={() => <ProtectedRoute farm={farm}><LocationPage data={farm.data} update={farm.update} /></ProtectedRoute>} />
         <Route component={NotFound} />
       </Switch>
     </RoutedErrorBoundary>
@@ -311,9 +280,9 @@ function Landing({ onDemo }: { onDemo: () => void }) {
         </div>
       </header>
       <section className="relative mx-auto grid max-w-[1320px] items-center gap-10 px-6 pb-16 pt-10 md:grid-cols-[1.02fr_.98fr] md:px-12 md:pb-24 md:pt-16">
-        <div className="relative z-10 max-w-[650px] page-enter">
+          <div className="relative z-10 order-2 min-w-0 w-full max-w-[650px] page-enter md:order-1">
           <span className="eyebrow"><span className="h-2 w-2 rounded-full bg-[#879e6b]" /> A student-built farm prototype</span>
-          <h1 className="mt-7 font-serif text-[clamp(3.7rem,8vw,7.8rem)] leading-[.9] tracking-[-.065em]">Care begins<br /><i className="font-medium text-[#76916b]">with a signal.</i></h1>
+          <h1 className="mt-7 font-serif text-[clamp(3.5rem,7.5vw,7rem)] leading-[.96] tracking-[-.02em]">Care begins<br /><i className="font-medium text-[#76916b]">with a signal.</i></h1>
           <p className="mt-7 max-w-[500px] text-[17px] leading-7 text-[#607363]">A clear workspace for planning wearable sensors, organizing a herd, and checking real readings when your prototype is transmitting.</p>
           <div className="mt-9 flex flex-wrap items-center gap-3">
             <button onClick={onDemo} className="inline-flex items-center gap-2 rounded-full border border-[#cbd4c3] bg-[#faf9f2] px-6 py-3.5 text-sm font-semibold text-[#315c42] hover:bg-[#e9eee3]" data-testid="button-enter-demo">Explore sample workspace <ArrowRight size={15} /></button>
@@ -326,14 +295,14 @@ function Landing({ onDemo }: { onDemo: () => void }) {
             <span>03 <b className="ml-2 font-medium text-[#365b43]">Review readings</b></span>
           </div>
         </div>
-        <div className="relative mx-auto w-full max-w-[560px] page-enter [animation-delay:100ms]">
+        <div className="relative mx-auto order-1 min-w-0 w-full max-w-[560px] page-enter [animation-delay:100ms] md:order-2">
           <div className="absolute -right-8 -top-8 h-40 w-40 rounded-full bg-[#e5e8d9] blur-2xl" />
           <div className="relative overflow-hidden rounded-[34px] bg-[#dce6d4] p-4 sm:p-6">
             <div className="absolute -right-12 top-12 h-64 w-64 rounded-full border border-[#a9bea0]/65" />
             <div className="absolute -right-1 top-24 h-44 w-44 rounded-full border border-[#a9bea0]/60" />
             <div className="relative mb-4 flex items-center justify-between px-1 text-[10px] font-bold uppercase tracking-[.17em] text-[#58735a]"><span>Farm workspace · Sign in</span><span>Secure access</span></div>
             <div className="relative rounded-[26px] bg-[#f9f8f0] px-3 py-5 shadow-[0_18px_50px_rgba(40,66,43,.10)] sm:px-5">
-              <SignIn routing="virtual" signUpUrl={`${basePath}/sign-up`} />
+              <SignIn routing="path" path={`${basePath}/`} signUpUrl={`${basePath}/sign-up`} />
               <div className="mx-auto mt-3 flex max-w-[440px] items-center justify-between border-t border-[#e6e9df] px-2 pt-4 text-xs">
                 <Link href="/sign-in/forgot-password" className="font-semibold text-[#527252] hover:underline" data-testid="link-forgot-password">Forgot password?</Link>
                 <Link href="/sign-up" className="font-semibold text-[#315c42] hover:underline" data-testid="link-inline-sign-up">Create account</Link>
@@ -427,10 +396,10 @@ const navItems = [
   { key: 'thingspeak', label: 'ThingSpeak', href: '/thingspeak', icon: Cloud },
   { key: 'cattle', label: 'Cattle profiles', href: '/cattle', icon: Users },
   { key: 'sensors', label: 'Sensors & mapping', href: '/sensors', icon: Cpu },
-  { key: 'bom', label: 'Bill of materials', href: '/bom', icon: Boxes },
   { key: 'alerts', label: 'Threshold alerts', href: '/alerts', icon: AlertTriangle },
   { key: 'about', label: 'About prototype', href: '/about', icon: BookOpen },
   { key: 'settings', label: 'Settings', href: '/settings', icon: Settings },
+  { key: 'location', label: 'Location', href: '/location', icon: MapPin },
 ];
 
 function Brand({ inverse = false }: { inverse?: boolean }) {
@@ -469,21 +438,20 @@ function Dashboard({ data, update, sampleWorkspace }: { data: FarmData; update: 
     update((old) => ({ ...old, sensors: [...old.sensors, sensor] }));
     setEditor(null);
   };
-  const availableHardware = data.bom.filter((item) => item.status === 'available' || item.status === 'connected').length;
   return <div className="page-enter">
     <PageHeading eyebrow="Farm overview" title="A clear view of the build." description="Keep the herd, planned hardware, and data connection in one place. No live readings until a channel is connected." action={<div className="flex flex-wrap gap-2"><Button onClick={() => setEditor(blankSensor())} variant="outline" testId="button-dashboard-add-sensor"><Plus size={15} />Add Sensor</Button><Link href="/thingspeak" className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#cdd7c8] bg-[#fbfaf4] px-4 text-xs font-semibold text-[#315c42] hover:bg-[#edf1e6]" data-testid="button-connect-channel"><Cloud size={15} /> Connect a channel <ArrowRight size={14} /></Link></div>} />
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <Stat label="Cattle profiles" value={data.cattle.length.toString().padStart(2, '0')} detail={sampleWorkspace ? 'Sample profile records' : 'Profiles in this workspace'} icon={Users} />
       <Stat label="Sensor records" value={data.sensors.length.toString().padStart(2, '0')} detail={`${data.sensors.filter((s) => s.connectionStatus === 'connected').length} marked physically connected`} icon={Cpu} tone="sage" />
-      <Stat label="Hardware ready" value={`${availableHardware} / ${data.bom.length}`} detail="Available or connected components" icon={Boxes} tone="gold" />
+      <Stat label="Mapped sensors" value={data.sensors.filter((sensor) => sensor.thingSpeakField).length.toString().padStart(2, '0')} detail="Assigned to channel fields" icon={Cable} tone="gold" />
       <Stat label="Live channel" value="—" detail="Waiting for channel connection" icon={Radio} tone="sage" />
     </div>
     <div className="mt-5 grid gap-5 xl:grid-cols-[1.35fr_.85fr]">
       <Card><CardTitle icon={Activity} title="Monitoring status" detail="Data state for this prototype" aside={<Pill tone="amber">Waiting for data</Pill>} /><div className="grid gap-5 p-5 md:grid-cols-[1fr_230px] md:p-6"><div><h3 className="font-serif text-2xl">The channel is not connected yet.</h3><p className="mt-2 max-w-xl text-sm leading-6 text-[#748275]">Connect a ThingSpeak channel after the physical device begins transmitting. Until then, this workspace only contains your project records.</p><Link href="/thingspeak" className="mt-5 inline-flex items-center gap-2 text-xs font-bold text-[#315c42]" data-testid="link-setup-thingspeak">Set up ThingSpeak <ArrowRight size={14} /></Link></div><div className="flex min-h-[132px] flex-col justify-between rounded-2xl bg-[#edf1e7] p-4"><div className="flex items-center justify-between"><span className="text-[10px] font-bold uppercase tracking-[.15em] text-[#748674]">Incoming feed</span><CloudOff size={16} className="text-[#829681]" /></div><p className="font-serif text-3xl text-[#82927e]">No feed</p><p className="text-[10px] text-[#879285]">This is not a sensor fault diagnosis.</p></div></div></Card>
       <Card><CardTitle icon={CalendarDays} title="Build checklist" detail="From plan to physical signal" /><div className="space-y-0 p-5">{[
-        ['01', 'Record hardware', `${data.bom.length} items in bill of materials`, '/bom'],
-        ['02', 'Assign sensors', `${data.sensors.length} sensor records`, '/sensors'],
-        ['03', 'Connect data', data.config.channelId ? `Channel ${data.config.channelId}` : 'No channel configured', '/thingspeak'],
+        ['01', 'Assign sensors', `${data.sensors.length} sensor records`, '/sensors'],
+        ['02', 'Connect data', data.config.channelId ? `Channel ${data.config.channelId}` : 'No channel configured', '/thingspeak'],
+        ['03', 'Set farm location', data.location.farmName || 'Add farm details', '/location'],
       ].map(([n, title, detail, href], index) => <Link href={href} key={n} className="flex items-center gap-3 border-b border-[#edf0e8] py-3 last:border-0" data-testid={`link-checklist-${n}`}><span className={`flex h-8 w-8 items-center justify-center rounded-full text-[10px] font-bold ${index === 0 ? 'bg-[#315c42] text-white' : 'bg-[#e8eee2] text-[#53735a]'}`}>{n}</span><span className="min-w-0 flex-1"><b className="block text-xs">{title}</b><span className="mt-1 block truncate text-[10px] text-[#879287]">{detail}</span></span><ChevronRight size={15} className="text-[#8c9b8c]" /></Link>)}</div></Card>
     </div>
     <div className="mt-5 grid gap-5 lg:grid-cols-[1.1fr_.9fr]">
@@ -531,8 +499,8 @@ function LivePage({ data, feed, setFeed, readApiKey }: { data: FarmData; feed: T
   const fieldCards = liveFields.filter((field) => !data.sensors.some((sensor) => sensor.thingSpeakField === field)).map((field) => ({
     sensor: undefined,
     field,
-    label: String(response?.channel[field as keyof typeof response.channel] || data.config.mappings[field]?.label || field),
-    unit: data.config.mappings[field]?.unit || '',
+    label: String(response?.channel[field as keyof typeof response.channel] || field),
+    unit: '',
   }));
   const cards = [...sensorCards, ...fieldCards];
   const chartField = trendField && liveFields.includes(trendField) ? trendField : liveFields[0] || '';
@@ -563,8 +531,8 @@ function LivePage({ data, feed, setFeed, readApiKey }: { data: FarmData; feed: T
       {!hasRealReadings && <div className="mx-5 mb-5 flex flex-col gap-3 rounded-2xl bg-[#eff1e8] p-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex gap-3"><Clock3 size={16} className="mt-0.5 shrink-0 text-[#6d826b]" /><p className="text-xs leading-5 text-[#667766]"><b className="text-[#3e5d43]">Waiting for sensor data.</b> Sample values are kept separate from this live view.</p></div><Button onClick={() => setSampleVisible(!sampleVisible)} variant="outline" testId="button-toggle-sample-readings">{sampleVisible ? 'Hide sample values' : 'View sample values'}</Button></div>}
     </Card>
     {sampleVisible && !hasRealReadings && <Card className="mt-5 border-[#e4d6ac]"><CardTitle icon={CircleHelp} title="Sample values — not live data" detail="Illustrative placeholders for interface demonstration only" aside={<Pill tone="amber">SAMPLE ONLY</Pill>} /><div className="grid gap-4 p-5 sm:grid-cols-3">{[['Body temperature', '38.6', '°C'], ['Pulse rate', '66', 'bpm'], ['Activity', '1,284', 'steps']].map(([name, value, unit]) => <div key={name} className="rounded-xl bg-[#f7f2df] p-4" data-testid={`sample-reading-${name.toLowerCase().replaceAll(' ', '-')}`}><p className="text-[10px] font-bold uppercase tracking-wider text-[#8b7c50]">{name}</p><p className="mt-3 font-serif text-3xl text-[#5d573e]">{value}<span className="ml-1 font-sans text-sm">{unit}</span></p><p className="mt-2 text-[10px] text-[#968b69]">Example only · not from a sensor</p></div>)}</div></Card>}
-    {hasRealReadings && <Card className="mt-5"><CardTitle icon={Activity} title="Historical trend" detail="Graph contains real feed entries only" aside={<label className="text-[10px] text-[#768477]">Field <select value={chartField} onChange={(event) => setTrendField(event.target.value)} className="field-input compact ml-2 w-auto min-w-[130px]" data-testid="select-trend-field">{liveFields.map((field) => <option key={field} value={field}>{data.config.mappings[field]?.label || response?.channel[field as keyof typeof response.channel] || field}</option>)}</select></label>} /><div className="h-[290px] px-3 pb-4 pt-5" data-testid="chart-real-feed-trend"><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData} margin={{ top: 8, right: 20, left: 0, bottom: 4 }}><CartesianGrid stroke="#e4e8de" strokeDasharray="3 4" /><XAxis dataKey="timestamp" tick={{ fill: '#7f8e7d', fontSize: 10 }} axisLine={{ stroke: '#d8dfd3' }} tickLine={false} /><YAxis tick={{ fill: '#7f8e7d', fontSize: 10 }} axisLine={false} tickLine={false} width={42} /><ChartTooltip contentStyle={{ borderRadius: 12, borderColor: '#dce3d7', background: '#fbfaf4', fontSize: 12 }} /><Line type="monotone" dataKey="value" stroke="#47724f" strokeWidth={2.5} dot={{ r: 3, fill: '#47724f', strokeWidth: 0 }} activeDot={{ r: 5 }} /></LineChart></ResponsiveContainer></div></Card>}
-    <Card className="mt-5"><CardTitle icon={ClipboardList} title="Feed history" detail="All eight ThingSpeak fields, across returned real entries" aside={<span className="font-mono text-[10px] text-[#889487]">{response?.feeds.length || 0} entries</span>} />{response?.feeds?.length ? <div className="overflow-x-auto"><table className="w-full min-w-[1120px] text-left text-xs"><thead className="bg-[#f5f5ed] text-[9px] uppercase tracking-wider text-[#829082]"><tr><th className="px-5 py-3">Entry</th><th className="px-5 py-3">Created at</th>{allFields.map((field) => <th key={field} className="px-4 py-3">{data.config.mappings[field]?.label || response.channel[field as keyof typeof response.channel] || field}<span className="mt-1 block font-mono normal-case">{field}</span></th>)}</tr></thead><tbody>{response.feeds.slice().sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((entry) => <tr key={entry.entry_id} className="border-t border-[#edf0e8]" data-testid={`row-feed-${entry.entry_id}`}><td className="px-5 py-3 font-mono">#{entry.entry_id}</td><td className="px-5 py-3 text-[#778477]">{new Date(entry.created_at).toLocaleString()}</td>{allFields.map((field) => <td key={field} className="px-4 py-3">{entry[field as keyof ThingSpeakFeed] || '—'}</td>)}</tr>)}</tbody></table></div> : <EmptyState icon={Activity} title="No real feed history yet" text={configured ? 'The last successful read returned no sensor entries.' : 'Connect a ThingSpeak channel to populate real readings and entry history.'} href="/thingspeak" link="Configure channel" />}</Card>
+    {hasRealReadings && <Card className="mt-5"><CardTitle icon={Activity} title="Historical trend" detail="Graph contains real feed entries only" aside={<label className="text-[10px] text-[#768477]">Field <select value={chartField} onChange={(event) => setTrendField(event.target.value)} className="field-input compact ml-2 w-auto min-w-[130px]" data-testid="select-trend-field">{liveFields.map((field) => <option key={field} value={field}>{response?.channel[field as keyof typeof response.channel] || field}</option>)}</select></label>} /><div className="h-[290px] px-3 pb-4 pt-5" data-testid="chart-real-feed-trend"><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData} margin={{ top: 8, right: 20, left: 0, bottom: 4 }}><CartesianGrid stroke="#e4e8de" strokeDasharray="3 4" /><XAxis dataKey="timestamp" tick={{ fill: '#7f8e7d', fontSize: 10 }} axisLine={{ stroke: '#d8dfd3' }} tickLine={false} /><YAxis tick={{ fill: '#7f8e7d', fontSize: 10 }} axisLine={false} tickLine={false} width={42} /><ChartTooltip contentStyle={{ borderRadius: 12, borderColor: '#dce3d7', background: '#fbfaf4', fontSize: 12 }} /><Line type="monotone" dataKey="value" stroke="#47724f" strokeWidth={2.5} dot={{ r: 3, fill: '#47724f', strokeWidth: 0 }} activeDot={{ r: 5 }} /></LineChart></ResponsiveContainer></div></Card>}
+    <Card className="mt-5"><CardTitle icon={ClipboardList} title="Feed history" detail="All eight ThingSpeak fields, across returned real entries" aside={<span className="font-mono text-[10px] text-[#889487]">{response?.feeds.length || 0} entries</span>} />{response?.feeds?.length ? <div className="overflow-x-auto"><table className="w-full min-w-[1120px] text-left text-xs"><thead className="bg-[#f5f5ed] text-[9px] uppercase tracking-wider text-[#829082]"><tr><th className="px-5 py-3">Entry</th><th className="px-5 py-3">Created at</th>{allFields.map((field) => <th key={field} className="px-4 py-3">{response.channel[field as keyof typeof response.channel] || field}<span className="mt-1 block font-mono normal-case">{field}</span></th>)}</tr></thead><tbody>{response.feeds.slice().sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((entry) => <tr key={entry.entry_id} className="border-t border-[#edf0e8]" data-testid={`row-feed-${entry.entry_id}`}><td className="px-5 py-3 font-mono">#{entry.entry_id}</td><td className="px-5 py-3 text-[#778477]">{new Date(entry.created_at).toLocaleString()}</td>{allFields.map((field) => <td key={field} className="px-4 py-3">{entry[field as keyof ThingSpeakFeed] || '—'}</td>)}</tr>)}</tbody></table></div> : <EmptyState icon={Activity} title="No real feed history yet" text={configured ? 'The last successful read returned no sensor entries.' : 'Connect a ThingSpeak channel to populate real readings and entry history.'} href="/thingspeak" link="Configure channel" />}</Card>
   </div>;
 }
 
@@ -574,7 +542,6 @@ function ThingSpeakPage({ data, update, feed, setFeed, readApiKey, setReadApiKey
   const connected = Boolean(feed);
   const [error, setError] = useState('');
   const { mutate, isPending } = useReadThingSpeakFeeds();
-  const setMapping = (field: string, key: keyof FieldMapping, value: string) => update((old) => ({ ...old, config: { ...old.config, mappings: { ...old.config.mappings, [field]: { ...old.config.mappings[field], [key]: value } } } }));
   const connect = (event: FormEvent) => {
     event.preventDefault();
     if (!channel.trim()) { setError('Enter a ThingSpeak channel ID.'); return; }
@@ -589,8 +556,16 @@ function ThingSpeakPage({ data, update, feed, setFeed, readApiKey, setReadApiKey
   };
   const disconnect = () => { setFeed(null); setReadApiKey(''); update((old) => ({ ...old, config: { ...old.config, channelId: '' } })); setChannel(''); };
   const header = connected && response ? response.channel.name || `Channel ${response.channel.id || channel}` : 'Not connected';
+  const availableFields = response ? Array.from({ length: 8 }, (_, index) => `field${index + 1}`).filter((field) => {
+    const hasLabel = Boolean(response.channel[field as keyof typeof response.channel]);
+    const hasValue = response.feeds.some((entry) => {
+      const value = entry[field as keyof ThingSpeakFeed];
+      return value !== null && value !== undefined && value !== '';
+    });
+    return hasLabel || hasValue;
+  }) : [];
   return <div className="page-enter">
-    <PageHeading eyebrow="Integration / ThingSpeak" title="Bring in your channel." description="Channel settings and field labels are stored locally. A private read key stays in memory and is never persisted." />
+    <PageHeading eyebrow="Integration / ThingSpeak" title="Bring in your channel." description="Channel ID and sensor assignments are stored locally. A private read key stays in memory and is never persisted." />
     <div className="grid gap-5 xl:grid-cols-[.88fr_1.12fr]">
       <Card><CardTitle icon={Cloud} title="Channel connection" detail="Read-only channel data via the project backend" aside={<Pill tone={connected ? 'live' : 'amber'}>{connected ? 'Connected' : 'Not connected'}</Pill>} />
         <form onSubmit={connect} className="space-y-4 p-5">
@@ -602,27 +577,18 @@ function ThingSpeakPage({ data, update, feed, setFeed, readApiKey, setReadApiKey
         </form>
         {connected && response && <div className="mx-5 mb-5 rounded-2xl border border-[#dce7d6] bg-[#edf3e8] p-4" data-testid="status-channel-connected"><div className="flex items-center gap-2 text-xs font-semibold text-[#3f6846]"><Check size={15} />Latest request succeeded</div><p className="mt-2 text-[11px] text-[#718171]">{header} · {response.feeds.length} feed entries returned</p><p className="mt-1 text-[10px] text-[#829082]">A successful read confirms channel access for this request only; device transmission continuity is not guaranteed.</p></div>}
       </Card>
-      <Card><CardTitle icon={SlidersHorizontal} title="Field labels & units" detail="Map channel fields to the signal names used in this project" /><div className="overflow-x-auto"><table className="w-full min-w-[540px] text-left text-xs"><thead className="bg-[#f5f5ed] text-[9px] uppercase tracking-wider text-[#829082]"><tr><th className="px-5 py-3">Field</th><th className="px-3 py-3">Measurement label</th><th className="px-3 py-3">Unit</th></tr></thead><tbody>{Array.from({ length: 8 }, (_, i) => `field${i + 1}`).map((field) => <tr className="border-t border-[#edf0e8]" key={field}><td className="px-5 py-3 font-mono text-[#66806a]">{field}</td><td className="px-3 py-2"><input aria-label={`${field} label`} className="field-input compact" value={data.config.mappings[field]?.label || ''} onChange={(e) => setMapping(field, 'label', e.target.value)} data-testid={`input-${field}-label`} /></td><td className="px-3 py-2"><input aria-label={`${field} unit`} className="field-input compact w-20" value={data.config.mappings[field]?.unit || ''} onChange={(e) => setMapping(field, 'unit', e.target.value)} placeholder="—" data-testid={`input-${field}-unit`} /></td></tr>)}</tbody></table></div></Card>
+      <Card><CardTitle icon={Radio} title="Detected channel fields" detail="Read-only fields discovered from this channel" />
+        {availableFields.length ? <div className="divide-y divide-[#edf0e8]">{availableFields.map((field) => {
+          const label = response?.channel[field as keyof typeof response.channel];
+          const sensor = data.sensors.find((item) => item.thingSpeakField === field);
+          return <div key={field} className="flex items-center gap-3 px-5 py-3.5" data-testid={`detected-field-${field}`}><span className="flex h-8 w-14 items-center justify-center rounded-lg bg-[#edf1e6] font-mono text-[10px] font-bold text-[#3f6846]">{field}</span><div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">{label || field}</p><p className="mt-1 text-[10px] text-[#718071]">{sensor ? `Mapped to ${sensor.name}` : 'No sensor assigned'}</p></div><Pill tone={sensor ? 'sage' : 'plain'}>{sensor ? 'Mapped' : 'Available'}</Pill></div>;
+        })}</div> : <EmptyState icon={Radio} title={connected ? 'No fields found' : 'Connect a channel'} text={connected ? 'This channel has no configured fields or feed values yet.' : 'Connect a ThingSpeak channel to discover its available fields.'} href="/sensors" link="Manage sensor mapping" />}
+      </Card>
     </div>
     <div className="mt-5 grid gap-5 md:grid-cols-2">
-      <Card><CardTitle icon={Radio} title="Connection boundaries" /><div className="space-y-3 p-5 text-xs leading-5 text-[#728073]"><p className="flex gap-2"><Check size={14} className="mt-0.5 shrink-0 text-[#66826a]" />Requests use the generated API mutation; browser code does not call ThingSpeak directly.</p><p className="flex gap-2"><Check size={14} className="mt-0.5 shrink-0 text-[#66826a]" />Channel ID and display mappings persist locally; the read key does not.</p><p className="flex gap-2"><CircleHelp size={14} className="mt-0.5 shrink-0 text-[#9b8344]" />An online channel is not evidence that a sensor is calibrated or that an animal is healthy.</p></div></Card>
+      <Card><CardTitle icon={Radio} title="Connection boundaries" /><div className="space-y-3 p-5 text-xs leading-5 text-[#728073]"><p className="flex gap-2"><Check size={14} className="mt-0.5 shrink-0 text-[#66826a]" />Requests use the generated API mutation; browser code does not call ThingSpeak directly.</p><p className="flex gap-2"><Check size={14} className="mt-0.5 shrink-0 text-[#66826a]" />Channel ID and sensor-to-field assignments persist locally; the read key does not.</p><p className="flex gap-2"><CircleHelp size={14} className="mt-0.5 shrink-0 text-[#9b8344]" />An online channel is not evidence that a sensor is calibrated or that an animal is healthy.</p></div></Card>
       <Card><CardTitle icon={Cable} title="Configured sensor links" detail="Sensor-to-field mapping is managed on Sensors & mapping" /><div className="divide-y divide-[#edf0e8]">{data.sensors.length ? data.sensors.map((sensor) => <div key={sensor.id} className="flex items-center gap-3 px-5 py-3" data-testid={`thingspeak-sensor-${sensor.id}`}><span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#edf1e6] text-[#507457]"><Thermometer size={15} /></span><div className="flex-1"><p className="text-xs font-semibold">{sensor.name}</p><p className="mt-1 text-[10px] text-[#879287]">{sensor.measurementType} → {sensor.thingSpeakField || 'unmapped'}</p></div><Pill tone={sensor.connectionStatus === 'connected' ? 'live' : 'plain'}>{sensor.connectionStatus}</Pill></div>) : <p className="p-5 text-xs text-[#879287]">No sensors have been added.</p>}</div></Card>
     </div>
-  </div>;
-}
-
-function BomPage({ data, update }: { data: FarmData; update: (next: FarmData | ((old: FarmData) => FarmData)) => void }) {
-  const [editor, setEditor] = useState<BomItem | null>(null);
-  const [isNew, setIsNew] = useState(false);
-  const blank: BomItem = { id: '', name: '', purpose: '', quantity: 1, connection: '', status: 'planned' };
-  const openNew = () => { setEditor({ ...blank }); setIsNew(true); };
-  const save = (event: FormEvent) => { event.preventDefault(); if (!editor?.name.trim()) return; const item = { ...editor, id: editor.id || crypto.randomUUID() }; update((old) => ({ ...old, bom: isNew ? [...old.bom, item] : old.bom.map((x) => x.id === item.id ? item : x) })); setEditor(null); };
-  const remove = (id: string) => { if (window.confirm('Remove this hardware item from the bill of materials?')) update((old) => ({ ...old, bom: old.bom.filter((item) => item.id !== id) })); };
-  const count = (status: BomItem['status']) => data.bom.filter((item) => item.status === status).length;
-  return <div className="page-enter"><PageHeading eyebrow="Build planning / inventory" title="Bill of materials" description="Track what the student prototype needs, what is on hand, and what has been physically connected." action={<Button onClick={openNew} testId="button-add-bom-item"><Plus size={15} />Add item</Button>} />
-    <div className="mb-5 grid gap-3 sm:grid-cols-3">{(['planned', 'available', 'connected'] as const).map((status) => <div key={status} className="flex items-center justify-between rounded-2xl border border-[#e1e5da] bg-[#faf9f3] px-4 py-3" data-testid={`bom-count-${status}`}><span className="text-xs capitalize text-[#718071]">{status}</span><span className="font-serif text-2xl">{count(status).toString().padStart(2, '0')}</span></div>)}</div>
-    <Card><CardTitle icon={Boxes} title="Project components" detail={`${data.bom.length} hardware records · editable local project list`} /><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-xs"><thead className="bg-[#f5f5ed] text-[9px] uppercase tracking-wider text-[#829082]"><tr><th className="px-5 py-3">Component</th><th className="px-4 py-3">Purpose</th><th className="px-4 py-3">Qty</th><th className="px-4 py-3">Connection</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Actions</th></tr></thead><tbody>{data.bom.map((item) => { const ItemIcon = bomIcon(item.name); return <tr key={item.id} className="border-t border-[#edf0e8] hover:bg-[#fafaf5]" data-testid={`row-bom-${item.id}`}><td className="px-5 py-4"><div className="flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#edf1e6] text-[#58755b]"><ItemIcon size={16} /></span><span><p className="font-semibold">{item.name}</p><span className="mt-1 block font-mono text-[9px] text-[#8a9588]">{item.id}</span></span></div></td><td className="max-w-[220px] px-4 py-4 leading-5 text-[#778477]">{item.purpose}</td><td className="px-4 py-4 font-mono">{item.quantity}</td><td className="px-4 py-4 text-[#778477]">{item.connection || '—'}</td><td className="px-4 py-4"><Pill tone={item.status === 'connected' ? 'live' : item.status === 'available' ? 'sage' : 'plain'}>{item.status}</Pill></td><td className="px-4 py-4"><div className="flex gap-1"><IconButton label={`Edit ${item.name}`} onClick={() => { setEditor({ ...item }); setIsNew(false); }} testId={`button-edit-bom-${item.id}`}><Pencil size={14} /></IconButton><IconButton label={`Delete ${item.name}`} onClick={() => remove(item.id)} testId={`button-delete-bom-${item.id}`}><Trash2 size={14} /></IconButton></div></td></tr>; })}</tbody></table></div>{!data.bom.length && <EmptyState icon={Boxes} title="No hardware listed" text="Add components as the project plan takes shape." action={<Button onClick={openNew} testId="button-empty-add-bom"><Plus size={14} />Add a component</Button>} />}</Card>
-    {editor && <Modal title={isNew ? 'Add a component' : 'Edit component'} onClose={() => setEditor(null)}><form onSubmit={save} className="space-y-3"><Field label="Component name"><input autoFocus required className="field-input" value={editor.name} onChange={(e) => setEditor({ ...editor, name: e.target.value })} data-testid="input-bom-name" /></Field><Field label="Purpose"><textarea className="field-input min-h-[80px] resize-y" value={editor.purpose} onChange={(e) => setEditor({ ...editor, purpose: e.target.value })} data-testid="input-bom-purpose" /></Field><div className="grid grid-cols-2 gap-3"><Field label="Quantity"><input type="number" min="1" className="field-input" value={editor.quantity} onChange={(e) => setEditor({ ...editor, quantity: Number(e.target.value) })} data-testid="input-bom-quantity" /></Field><Field label="Status"><select className="field-input" value={editor.status} onChange={(e) => setEditor({ ...editor, status: e.target.value as BomItem['status'] })} data-testid="select-bom-status"><option value="planned">Planned</option><option value="available">Available</option><option value="connected">Connected</option></select></Field></div><Field label="Connection / interface"><input className="field-input" value={editor.connection} onChange={(e) => setEditor({ ...editor, connection: e.target.value })} placeholder="e.g. I²C, GPIO, Wi-Fi" data-testid="input-bom-connection" /></Field><div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setEditor(null)} testId="button-cancel-bom">Cancel</Button><Button type="submit" testId="button-save-bom">Save item</Button></div></form></Modal>}
   </div>;
 }
 
@@ -696,9 +662,60 @@ function SettingsPage({ data, update }: { data: FarmData; update: (next: FarmDat
   return <div className="page-enter"><PageHeading eyebrow="Workspace / preferences" title="Settings" description="Project configuration is local to this browser; the private channel key is never persisted." />
     <div className="grid gap-5 lg:grid-cols-[1.05fr_.95fr]">
       <Card><CardTitle icon={RefreshCw} title="Feed refresh" detail="Controls requests while Live readings is open" /><div className="space-y-5 p-5"><label className="flex items-center justify-between gap-4 rounded-xl bg-[#f0f2e9] p-4"><span><span className="block text-xs font-semibold">Automatic refresh</span><span className="mt-1 block text-[10px] text-[#7b887b]">{data.config.autoRefreshEnabled ? 'On · requests run while the live page is open' : 'Off · refresh manually when needed'}</span></span><input type="checkbox" role="switch" checked={data.config.autoRefreshEnabled} onChange={(e) => saveAutoRefresh(e.target.checked)} className="h-5 w-5 accent-[#315c42]" data-testid="toggle-auto-refresh" /></label><label className="field-label max-w-sm">Refresh frequency<select value={data.config.refreshSeconds} disabled={!data.config.autoRefreshEnabled} onChange={(e) => saveInterval(Number(e.target.value))} className="field-input disabled:opacity-45" data-testid="select-refresh-interval"><option value="15">Every 15 seconds</option><option value="30">Every 30 seconds</option><option value="60">Every 60 seconds</option><option value="300">Every 5 minutes</option></select></label><p className="text-[11px] leading-5 text-[#829082]">Each request uses the generated API mutation. The interval does not create data or indicate transmission between requests. A private-channel key remains only in page memory and is sent on every refresh.</p>{saved && <p className="flex items-center gap-2 text-xs font-semibold text-[#4b7652]" data-testid="status-settings-saved"><Check size={14} />Preference saved on this device</p>}</div></Card>
-      <Card><CardTitle icon={Settings} title="Local configuration" detail="Stored in this browser's local storage" /><div className="divide-y divide-[#edf0e8]"><SettingRow label="ThingSpeak channel ID" value={data.config.channelId || 'Not configured'} /><SettingRow label="Field mappings" value={`${Object.values(data.config.mappings).filter((m) => m.label.trim()).length} labels configured`} /><SettingRow label="Animal profiles" value={`${data.cattle.length} profile${data.cattle.length === 1 ? '' : 's'}`} /><SettingRow label="Sensor records" value={`${data.sensors.length} record${data.sensors.length === 1 ? '' : 's'}`} /><SettingRow label="Private read API key" value="Not stored" highlight /></div></Card>
+      <Card><CardTitle icon={Settings} title="Local configuration" detail="Stored in this browser's local storage" /><div className="divide-y divide-[#edf0e8]"><SettingRow label="ThingSpeak channel ID" value={data.config.channelId || 'Not configured'} /><SettingRow label="Sensor field assignments" value={`${data.sensors.filter((sensor) => sensor.thingSpeakField).length} mapped`} /><SettingRow label="Animal profiles" value={`${data.cattle.length} profile${data.cattle.length === 1 ? '' : 's'}`} /><SettingRow label="Sensor records" value={`${data.sensors.length} record${data.sensors.length === 1 ? '' : 's'}`} /><SettingRow label="Farm location" value={data.location.farmName || data.location.village || 'Not set'} /><SettingRow label="Private read API key" value="Not stored" highlight /></div></Card>
     </div>
-    <Card className="mt-5"><CardTitle icon={ShieldCheck} title="Privacy & data boundaries" /><div className="grid gap-4 p-5 md:grid-cols-3"><div><p className="text-xs font-semibold">Project configuration</p><p className="mt-2 text-[11px] leading-5 text-[#7c897c]">Cattle, sensors, bill of materials, field mappings, and refresh interval remain in browser storage.</p></div><div><p className="text-xs font-semibold">Private key</p><p className="mt-2 text-[11px] leading-5 text-[#7c897c]">The read key stays in React memory for subsequent private-channel requests, is never written to browser storage, and is cleared on disconnect or logout.</p></div><div><p className="text-xs font-semibold">Feed data</p><p className="mt-2 text-[11px] leading-5 text-[#7c897c]">Real feed readings live in page memory only; reloading the page returns to a waiting state until another request.</p></div></div></Card>
+     <Card className="mt-5"><CardTitle icon={ShieldCheck} title="Privacy & data boundaries" /><div className="grid gap-4 p-5 md:grid-cols-3"><div><p className="text-xs font-semibold">Project configuration</p><p className="mt-2 text-[11px] leading-5 text-[#7c897c]">Cattle profiles, sensors, farm location, and refresh preferences remain in browser storage.</p></div><div><p className="text-xs font-semibold">Private key</p><p className="mt-2 text-[11px] leading-5 text-[#7c897c]">The read key stays in React memory for subsequent private-channel requests, is never written to browser storage, and is cleared on disconnect or logout.</p></div><div><p className="text-xs font-semibold">Feed data</p><p className="mt-2 text-[11px] leading-5 text-[#7c897c]">Real feed readings live in page memory only; reloading the page returns to a waiting state until another request.</p></div></div></Card>
+  </div>;
+}
+
+function LocationPage({ data, update }: { data: FarmData; update: (next: FarmData | ((old: FarmData) => FarmData)) => void }) {
+  const [draft, setDraft] = useState(data.location);
+  const [saved, setSaved] = useState(false);
+  const setField = (field: keyof FarmLocation, value: string) => setDraft((current) => ({ ...current, [field]: value }));
+  const save = (event: FormEvent) => {
+    event.preventDefault();
+    update((old) => ({ ...old, location: draft }));
+    setSaved(true);
+    window.setTimeout(() => setSaved(false), 2200);
+  };
+  const locationSummary = [draft.village, draft.district, draft.state].filter(Boolean).join(', ');
+  return <div className="page-enter">
+    <PageHeading eyebrow="Farm profile / location" title="Farm location" description="Record the farm's address and optional coordinates for project context. Details are entered manually and saved in this browser." />
+    <div className="grid gap-5 xl:grid-cols-[1.15fr_.85fr]">
+      <Card><CardTitle icon={MapPin} title="Location details" detail="No GPS access or background tracking" />
+        <form onSubmit={save} className="space-y-4 p-5">
+          <Field label="Farm name"><input className="field-input" value={draft.farmName} onChange={(event) => setField('farmName', event.target.value)} placeholder="e.g. Campus dairy unit" data-testid="input-farm-name" /></Field>
+          <Field label="Street address"><textarea className="field-input min-h-[84px] resize-y" value={draft.address} onChange={(event) => setField('address', event.target.value)} placeholder="Building, road, or landmark" data-testid="input-farm-address" /></Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Village / town"><input className="field-input" value={draft.village} onChange={(event) => setField('village', event.target.value)} data-testid="input-farm-village" /></Field>
+            <Field label="District"><input className="field-input" value={draft.district} onChange={(event) => setField('district', event.target.value)} data-testid="input-farm-district" /></Field>
+            <Field label="State"><input className="field-input" value={draft.state} onChange={(event) => setField('state', event.target.value)} data-testid="input-farm-state" /></Field>
+            <Field label="PIN code"><input inputMode="numeric" className="field-input" value={draft.postalCode} onChange={(event) => setField('postalCode', event.target.value)} data-testid="input-farm-pin" /></Field>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Latitude (optional)"><input type="number" min="-90" max="90" step="any" className="field-input" value={draft.latitude} onChange={(event) => setField('latitude', event.target.value)} placeholder="e.g. 12.9716" data-testid="input-farm-latitude" /></Field>
+            <Field label="Longitude (optional)"><input type="number" min="-180" max="180" step="any" className="field-input" value={draft.longitude} onChange={(event) => setField('longitude', event.target.value)} placeholder="e.g. 77.5946" data-testid="input-farm-longitude" /></Field>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#e8eadf] pt-4">
+            <p className="text-xs text-[#526553]">{saved ? 'Location saved on this device.' : 'Location is optional and is not shared with ThingSpeak.'}</p>
+            <Button type="submit" testId="button-save-location"><Check size={14} />Save location</Button>
+          </div>
+        </form>
+      </Card>
+      <Card className="overflow-hidden">
+        <div className="flex min-h-[330px] flex-col justify-between bg-[#e9eee2] p-6">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#315c42] text-white"><MapPin size={22} /></div>
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[.16em] text-[#405943]">Saved farm location</p>
+            <h3 className="mt-3 font-serif text-3xl text-[#243f2f]">{draft.farmName || 'Farm name not set'}</h3>
+            <p className="mt-2 text-sm leading-6 text-[#405943]">{locationSummary || 'Add a village, district, or state to see the location summary here.'}</p>
+            {draft.address && <p className="mt-2 text-xs leading-5 text-[#526553]">{draft.address}</p>}
+            {(draft.latitude || draft.longitude) && <p className="mt-4 font-mono text-xs font-semibold text-[#315c42]">{draft.latitude || '—'}°, {draft.longitude || '—'}°</p>}
+          </div>
+          <p className="text-xs leading-5 text-[#526553]">Location helps identify the farm workspace. CattleCare does not automatically track animals or claim to show a live map.</p>
+        </div>
+      </Card>
+    </div>
   </div>;
 }
 
@@ -750,7 +767,7 @@ function SensorForm({ editor, data, title, onSave, onClose }: { editor: Sensor; 
         <Field label="Critical maximum (optional)"><input type="number" step="any" className="field-input" value={form.criticalMax ?? ''} onChange={(e) => change('criticalMax', e.target.value === '' ? undefined : Number(e.target.value))} data-testid="input-sensor-critical-max" /></Field>
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="ThingSpeak field"><select className="field-input" value={form.thingSpeakField} onChange={(e) => change('thingSpeakField', e.target.value)} data-testid="select-sensor-field"><option value="">Not mapped</option>{Array.from({ length: 8 }, (_, index) => `field${index + 1}`).map((field) => <option key={field} value={field}>{field} · {data.config.mappings[field]?.label}</option>)}</select></Field>
+        <Field label="ThingSpeak field"><select className="field-input" value={form.thingSpeakField} onChange={(e) => change('thingSpeakField', e.target.value)} data-testid="select-sensor-field"><option value="">Not mapped</option>{Array.from({ length: 8 }, (_, index) => `field${index + 1}`).map((field) => <option key={field} value={field}>{field}</option>)}</select></Field>
         <Field label="Connection status"><select className="field-input" value={form.connectionStatus} onChange={(e) => change('connectionStatus', e.target.value as Sensor['connectionStatus'])} data-testid="select-sensor-status"><option value="planned">Planned</option><option value="connected">Physically connected</option></select></Field>
       </div>
       <p className="text-[10px] leading-4 text-[#829082]">Normal and critical values are project-configured comparison values, not veterinary guidance.</p>

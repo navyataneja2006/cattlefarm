@@ -1,0 +1,1 @@
+- [CattleCare data trust](cattlecare-data-trust.md) — Keep live readings, sample values, connection state, and alert language explicitly separated.
