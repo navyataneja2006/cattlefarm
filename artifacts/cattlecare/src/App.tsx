@@ -24,6 +24,7 @@ import NotFound from '@/pages/not-found';
 
 const queryClient = new QueryClient();
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+const publicDemoMode = import.meta.env.VITE_PUBLIC_DEMO_MODE === 'true';
 const clerkPubKey = publishableKeyFromHost(window.location.hostname, import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
 
@@ -154,12 +155,12 @@ function useFarmData() {
 }
 
 function App() {
-  if (!clerkPubKey) throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY in the environment');
+  if (!publicDemoMode && !clerkPubKey) throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY in the environment');
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <WouterRouter base={basePath}>
-          <ClerkProviderWithRoutes />
+          {publicDemoMode ? <AppRoutes publicDemo /> : <ClerkProviderWithRoutes />}
         </WouterRouter>
         <Toaster />
       </TooltipProvider>
@@ -239,27 +240,35 @@ const clerkAppearance = {
   },
 };
 
-function AppRoutes() {
+function AppRoutes({ publicDemo = false }: { publicDemo?: boolean }) {
   const farm = useFarmData();
+  const protectedPage = (content: ReactNode) => publicDemo
+    ? <PublicDemoProtectedRoute farm={farm}>{content}</PublicDemoProtectedRoute>
+    : <ProtectedRoute farm={farm}>{content}</ProtectedRoute>;
   return (
     <RoutedErrorBoundary>
       <Switch>
-        <Route path="/" component={() => <HomeRoute farm={farm} />} />
-        <Route path="/sign-in/*?" component={SignInPage} />
-        <Route path="/sign-up/*?" component={SignUpPage} />
-        <Route path="/dashboard" component={() => <ProtectedRoute farm={farm}><Dashboard data={farm.data} update={farm.update} sampleWorkspace={farm.sampleWorkspace} /></ProtectedRoute>} />
-        <Route path="/live" component={() => <ProtectedRoute farm={farm}><LivePage data={farm.data} feed={farm.feed} setFeed={farm.setFeed} readApiKey={farm.readApiKey} /></ProtectedRoute>} />
-        <Route path="/thingspeak" component={() => <ProtectedRoute farm={farm}><ThingSpeakPage data={farm.data} update={farm.update} feed={farm.feed} setFeed={farm.setFeed} readApiKey={farm.readApiKey} setReadApiKey={farm.setReadApiKey} /></ProtectedRoute>} />
-        <Route path="/sensors" component={() => <ProtectedRoute farm={farm}><SensorsPage data={farm.data} update={farm.update} /></ProtectedRoute>} />
-        <Route path="/cattle" component={() => <ProtectedRoute farm={farm}><CattlePage data={farm.data} update={farm.update} feed={farm.feed} /></ProtectedRoute>} />
-        <Route path="/alerts" component={() => <ProtectedRoute farm={farm}><AlertsPage data={farm.data} feed={farm.feed} /></ProtectedRoute>} />
-        <Route path="/about" component={() => <ProtectedRoute farm={farm}><AboutPage /></ProtectedRoute>} />
-        <Route path="/settings" component={() => <ProtectedRoute farm={farm}><SettingsPage data={farm.data} update={farm.update} /></ProtectedRoute>} />
-        <Route path="/location" component={() => <ProtectedRoute farm={farm}><LocationPage data={farm.data} update={farm.update} /></ProtectedRoute>} />
+        <Route path="/" component={() => publicDemo ? <PublicDemoHomeRoute farm={farm} /> : <HomeRoute farm={farm} />} />
+        <Route path="/sign-in/*?" component={() => publicDemo ? <Redirect to="/" /> : <SignInPage />} />
+        <Route path="/sign-up/*?" component={() => publicDemo ? <Redirect to="/" /> : <SignUpPage />} />
+        <Route path="/dashboard" component={() => protectedPage(<Dashboard data={farm.data} update={farm.update} sampleWorkspace={farm.sampleWorkspace} />)} />
+        <Route path="/live" component={() => protectedPage(<LivePage data={farm.data} feed={farm.feed} setFeed={farm.setFeed} readApiKey={farm.readApiKey} />)} />
+        <Route path="/thingspeak" component={() => protectedPage(<ThingSpeakPage data={farm.data} update={farm.update} feed={farm.feed} setFeed={farm.setFeed} readApiKey={farm.readApiKey} setReadApiKey={farm.setReadApiKey} />)} />
+        <Route path="/sensors" component={() => protectedPage(<SensorsPage data={farm.data} update={farm.update} />)} />
+        <Route path="/cattle" component={() => protectedPage(<CattlePage data={farm.data} update={farm.update} feed={farm.feed} />)} />
+        <Route path="/alerts" component={() => protectedPage(<AlertsPage data={farm.data} feed={farm.feed} />)} />
+        <Route path="/about" component={() => protectedPage(<AboutPage />)} />
+        <Route path="/settings" component={() => protectedPage(<SettingsPage data={farm.data} update={farm.update} />)} />
+        <Route path="/location" component={() => protectedPage(<LocationPage data={farm.data} update={farm.update} />)} />
         <Route component={NotFound} />
       </Switch>
     </RoutedErrorBoundary>
   );
+}
+
+function PublicDemoHomeRoute({ farm }: { farm: ReturnType<typeof useFarmData> }) {
+  if (farm.demo) return <Redirect to="/dashboard" />;
+  return <Landing onDemo={farm.enterDemo} demoOnly />;
 }
 
 function HomeRoute({ farm }: { farm: ReturnType<typeof useFarmData> }) {
@@ -269,15 +278,15 @@ function HomeRoute({ farm }: { farm: ReturnType<typeof useFarmData> }) {
   return <>{isSignedIn ? <Redirect to="/dashboard" /> : <Show when="signed-out"><Landing onDemo={farm.enterDemo} /></Show>}</>;
 }
 
-function Landing({ onDemo }: { onDemo: () => void }) {
+function Landing({ onDemo, demoOnly = false }: { onDemo: () => void; demoOnly?: boolean }) {
   return (
     <main className="grain min-h-[100dvh] overflow-hidden bg-[#f4f2e8] text-[#203e2e]" data-testid="page-login">
       <header className="relative z-10 mx-auto flex max-w-[1320px] items-center justify-between px-6 py-6 md:px-12">
         <Brand />
-        <div className="flex items-center gap-4">
+        {!demoOnly && <div className="flex items-center gap-4">
           <Link href="/sign-in" className="text-sm font-semibold hover:text-[#66836a]" data-testid="link-sign-in">Sign in</Link>
           <Link href="/sign-up" className="rounded-full bg-[#315c42] px-5 py-2.5 text-sm font-semibold text-[#f6f5e9] transition hover:bg-[#234832]" data-testid="link-sign-up">Create account</Link>
-        </div>
+        </div>}
       </header>
       <section className="relative mx-auto grid max-w-[1320px] items-center gap-10 px-6 pb-16 pt-10 md:grid-cols-[1.02fr_.98fr] md:px-12 md:pb-24 md:pt-16">
           <div className="relative z-10 order-2 min-w-0 w-full max-w-[650px] page-enter md:order-1">
@@ -286,7 +295,7 @@ function Landing({ onDemo }: { onDemo: () => void }) {
           <p className="mt-7 max-w-[500px] text-[17px] leading-7 text-[#607363]">A clear workspace for planning wearable sensors, organizing a herd, and checking real readings when your prototype is transmitting.</p>
           <div className="mt-9 flex flex-wrap items-center gap-3">
             <button onClick={onDemo} className="inline-flex items-center gap-2 rounded-full border border-[#cbd4c3] bg-[#faf9f2] px-6 py-3.5 text-sm font-semibold text-[#315c42] hover:bg-[#e9eee3]" data-testid="button-enter-demo">Explore sample workspace <ArrowRight size={15} /></button>
-            <Link href="/sign-up" className="rounded-full px-4 py-3.5 text-sm font-semibold text-[#45674c] hover:bg-[#e8ecdf]" data-testid="link-home-sign-up">Create account</Link>
+            {!demoOnly && <Link href="/sign-up" className="rounded-full px-4 py-3.5 text-sm font-semibold text-[#45674c] hover:bg-[#e8ecdf]" data-testid="link-home-sign-up">Create account</Link>}
           </div>
           <p className="mt-4 text-xs text-[#7d8c7d]">Sample mode uses illustrative project records. It is not a live farm connection.</p>
           <div className="mt-14 flex gap-8 border-t border-[#d8ddce] pt-5 text-xs text-[#7b887a]">
@@ -300,13 +309,11 @@ function Landing({ onDemo }: { onDemo: () => void }) {
           <div className="relative overflow-hidden rounded-[34px] bg-[#dce6d4] p-4 sm:p-6">
             <div className="absolute -right-12 top-12 h-64 w-64 rounded-full border border-[#a9bea0]/65" />
             <div className="absolute -right-1 top-24 h-44 w-44 rounded-full border border-[#a9bea0]/60" />
-            <div className="relative mb-4 flex items-center justify-between px-1 text-[10px] font-bold uppercase tracking-[.17em] text-[#58735a]"><span>Farm workspace · Sign in</span><span>Secure access</span></div>
+            <div className="relative mb-4 flex items-center justify-between px-1 text-[10px] font-bold uppercase tracking-[.17em] text-[#58735a]"><span>{demoOnly ? 'Farm workspace · Public demo' : 'Farm workspace · Sign in'}</span><span>{demoOnly ? 'Local sample' : 'Secure access'}</span></div>
             <div className="relative rounded-[26px] bg-[#f9f8f0] px-3 py-5 shadow-[0_18px_50px_rgba(40,66,43,.10)] sm:px-5">
-              <SignIn routing="path" path={`${basePath}/`} signUpUrl={`${basePath}/sign-up`} />
-              <div className="mx-auto mt-3 flex max-w-[440px] items-center justify-between border-t border-[#e6e9df] px-2 pt-4 text-xs">
-                <Link href="/sign-in/forgot-password" className="font-semibold text-[#527252] hover:underline" data-testid="link-forgot-password">Forgot password?</Link>
-                <Link href="/sign-up" className="font-semibold text-[#315c42] hover:underline" data-testid="link-inline-sign-up">Create account</Link>
-              </div>
+              {demoOnly
+                ? <div className="py-8 text-center"><Leaf className="mx-auto text-[#527252]" size={28} /><h2 className="mt-4 font-serif text-2xl text-[#254333]">Explore the sample farm</h2><p className="mx-auto mt-2 max-w-xs text-sm leading-6 text-[#718073]">Try the dashboard, herd profiles, sensor mapping, and settings. Your changes stay in this browser.</p></div>
+                : <><SignIn routing="path" path={`${basePath}/`} signUpUrl={`${basePath}/sign-up`} /><div className="mx-auto mt-3 flex max-w-[440px] items-center justify-between border-t border-[#e6e9df] px-2 pt-4 text-xs"><Link href="/sign-in/forgot-password" className="font-semibold text-[#527252] hover:underline" data-testid="link-forgot-password">Forgot password?</Link><Link href="/sign-up" className="font-semibold text-[#315c42] hover:underline" data-testid="link-inline-sign-up">Create account</Link></div></>}
             </div>
             <p className="relative mt-4 text-center text-[10px] leading-4 text-[#668067]">No channel is assumed live until a ThingSpeak read succeeds.</p>
           </div>
@@ -334,17 +341,37 @@ function ProtectedRoute({ farm, children }: { farm: ReturnType<typeof useFarmDat
   return <AppFrame farm={farm}>{children}</AppFrame>;
 }
 
-function AppFrame({ farm, children }: { farm: ReturnType<typeof useFarmData>; children: ReactNode }) {
-  const [location, setLocation] = useLocation();
+function PublicDemoProtectedRoute({ farm, children }: { farm: ReturnType<typeof useFarmData>; children: ReactNode }) {
+  if (!farm.demo) return <Redirect to="/" />;
+  return <AppFrame farm={farm} publicDemo>{children}</AppFrame>;
+}
+
+function AppFrame({ farm, children, publicDemo = false }: { farm: ReturnType<typeof useFarmData>; children: ReactNode; publicDemo?: boolean }) {
+  if (publicDemo) {
+    return <AppFrameLayout farm={farm} onLogout={() => { farm.setReadApiKey(''); farm.leaveDemo(); }} userName="Guest explorer">{children}</AppFrameLayout>;
+  }
+  return <AuthenticatedAppFrame farm={farm}>{children}</AuthenticatedAppFrame>;
+}
+
+function AuthenticatedAppFrame({ farm, children }: { farm: ReturnType<typeof useFarmData>; children: ReactNode }) {
   const { signOut } = useClerk();
   const { user } = useUser();
+  const logout = async () => {
+    farm.setReadApiKey('');
+    if (farm.demo) farm.leaveDemo();
+    else await signOut({ redirectUrl: basePath || '/' });
+  };
+  return <AppFrameLayout farm={farm} onLogout={logout} userName={user?.firstName || (farm.demo ? 'Guest explorer' : 'Farm team')}>{children}</AppFrameLayout>;
+}
+
+function AppFrameLayout({ farm, children, onLogout, userName }: { farm: ReturnType<typeof useFarmData>; children: ReactNode; onLogout: () => void | Promise<void>; userName: string }) {
+  const [location, setLocation] = useLocation();
   const health = useHealthCheck();
   const active = navItems.find((item) => item.href === location);
   const [mobileNav, setMobileNav] = useState(false);
   const logout = async () => {
-    farm.setReadApiKey('');
-    if (farm.demo) { farm.leaveDemo(); setLocation('/'); }
-    else await signOut({ redirectUrl: basePath || '/' });
+    await onLogout();
+    setLocation('/');
   };
   return (
     <div className="min-h-[100dvh] bg-[#f3f2e9] text-[#243f2f] md:flex" data-testid="app-shell">
@@ -374,8 +401,8 @@ function AppFrame({ farm, children }: { farm: ReturnType<typeof useFarmData>; ch
           </div>
           <div className="flex items-center gap-3">
             {farm.sampleWorkspace && <span className="rounded-full border border-[#d7c995] bg-[#f5f0db] px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[#82713f]" data-testid="status-sample-workspace">Sample records</span>}
-            <span className="hidden text-xs text-[#708071] sm:inline">{user?.firstName || (farm.demo ? 'Guest explorer' : 'Farm team')}</span>
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#dce7d4] text-xs font-bold text-[#315c42]">{user?.firstName?.[0] || 'F'}</span>
+            <span className="hidden text-xs text-[#708071] sm:inline">{userName}</span>
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#dce7d4] text-xs font-bold text-[#315c42]">{userName[0] || 'F'}</span>
           </div>
         </header>
         {mobileNav && <div className="fixed inset-0 z-30 bg-[#203e2e]/25 md:hidden" onClick={() => setMobileNav(false)}><div className="w-[290px] min-h-full bg-[#254b36] p-4 text-white" onClick={(event) => event.stopPropagation()}><div className="mb-7 flex items-center justify-between"><Brand inverse /><button onClick={() => setMobileNav(false)} data-testid="button-close-mobile-nav"><X /></button></div>{navItems.map((item) => <Link key={item.href} href={item.href} onClick={() => setMobileNav(false)} className={`nav-link ${location === item.href ? 'nav-active' : ''}`} data-testid={`mobile-link-nav-${item.key}`}><item.icon size={17} />{item.label}</Link>)}<button onClick={logout} className="nav-link mt-5 w-full" data-testid="mobile-button-logout"><LogOut size={17} />Sign out</button></div></div>}
