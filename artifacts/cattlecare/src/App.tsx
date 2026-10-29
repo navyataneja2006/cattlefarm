@@ -366,7 +366,7 @@ function AuthenticatedAppFrame({ farm, children }: { farm: ReturnType<typeof use
 
 function AppFrameLayout({ farm, children, onLogout, userName }: { farm: ReturnType<typeof useFarmData>; children: ReactNode; onLogout: () => void | Promise<void>; userName: string }) {
   const [location, setLocation] = useLocation();
-  const health = useHealthCheck();
+  const health = useHealthCheck({ query: { enabled: !farm.demo } });
   const active = navItems.find((item) => item.href === location);
   const [mobileNav, setMobileNav] = useState(false);
   const logout = async () => {
@@ -387,9 +387,9 @@ function AppFrameLayout({ farm, children, onLogout, userName }: { farm: ReturnTy
           {navItems.map((item) => <Link href={item.href} key={item.href} onClick={() => setMobileNav(false)} className={`nav-link ${location === item.href ? 'nav-active' : ''}`} data-testid={`link-nav-${item.key}`}><item.icon size={17} strokeWidth={1.8} /><span>{item.label}</span>{item.key === 'alerts' && <span className="ml-auto rounded-full bg-[#d5e1c9] px-1.5 py-0.5 text-[9px] font-bold text-[#31563c]">0</span>}</Link>)}
         </nav>
         <div className="mx-5 mb-5 rounded-2xl border border-[#41624b] bg-[#2d553d] p-3.5">
-          <div className="flex items-center gap-2 text-[11px] font-semibold" data-testid="status-api"><span className={`h-2 w-2 rounded-full ${health.isSuccess ? 'bg-[#9fbe83]' : health.isError ? 'bg-[#e6a395]' : 'bg-[#d3b87b]'}`} />API {health.data?.status || (health.isError ? 'unavailable' : health.isPending ? 'checking' : 'unknown')}</div>
-          <p className="mt-2 text-[10px] leading-4 text-[#b8c9b6]">{health.isError ? 'Could not reach the service. Farm records remain on this device.' : health.isSuccess ? 'Service health check responded.' : 'Checking service status…'}</p>
-          {health.isError && <button onClick={() => health.refetch()} className="mt-2 text-[10px] font-semibold text-[#d8e5c9]" data-testid="button-retry-health">Retry check</button>}
+          <div className="flex items-center gap-2 text-[11px] font-semibold" data-testid="status-api"><span className={`h-2 w-2 rounded-full ${farm.demo || health.isSuccess ? 'bg-[#9fbe83]' : health.isError ? 'bg-[#e6a395]' : 'bg-[#d3b87b]'}`} />API {farm.demo ? 'demo' : health.data?.status || (health.isError ? 'unavailable' : health.isPending ? 'checking' : 'unknown')}</div>
+          <p className="mt-2 text-[10px] leading-4 text-[#b8c9b6]">{farm.demo ? 'Public demo records are stored in this browser; no API service is connected.' : health.isError ? 'Could not reach the service. Farm records remain on this device.' : health.isSuccess ? 'Service health check responded.' : 'Checking service status…'}</p>
+          {!farm.demo && health.isError && <button onClick={() => health.refetch()} className="mt-2 text-[10px] font-semibold text-[#d8e5c9]" data-testid="button-retry-health">Retry check</button>}
         </div>
         <button onClick={logout} className="mx-4 mb-5 flex items-center gap-3 rounded-xl px-4 py-3 text-left text-xs font-semibold text-[#d3dfd1] hover:bg-[#315940]" data-testid="button-logout"><LogOut size={16} /> {farm.demo ? 'Exit sample workspace' : 'Sign out'}</button>
       </aside>
