@@ -4,6 +4,7 @@ import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Link, Redirect, Route, Router as WouterRouter, Switch, useLocation } from 'wouter';
+import { useHashLocation } from 'wouter/use-hash-location';
 import {
   Activity, AlertTriangle, ArrowRight, Check, ChevronDown,
   CircleHelp, ClipboardList, Cloud, CloudOff, Cpu, HeartPulse, LayoutDashboard, Leaf, LogOut,
@@ -159,7 +160,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <WouterRouter base={basePath}>
+        <WouterRouter base={publicDemoMode ? '' : basePath} hook={publicDemoMode ? useHashLocation : undefined}>
           {publicDemoMode ? <AppRoutes publicDemo /> : <ClerkProviderWithRoutes />}
         </WouterRouter>
         <Toaster />
