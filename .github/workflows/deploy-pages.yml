@@ -44,7 +44,9 @@ jobs:
         env:
           PORT: "4173"
           BASE_PATH: /cattlefarm/
-          VITE_PUBLIC_DEMO_MODE: "true"
+          VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.VITE_CLERK_PUBLISHABLE_KEY }}
+          VITE_PUBLIC_DEMO_MODE: ${{ secrets.VITE_CLERK_PUBLISHABLE_KEY == '' }}
+          VITE_PUBLIC_PAGES: "true"
 
       - name: Prepare Pages artifact
         run: |

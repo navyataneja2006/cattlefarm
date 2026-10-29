@@ -25,9 +25,22 @@ import NotFound from '@/pages/not-found';
 
 const queryClient = new QueryClient();
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+const publicPagesMode = import.meta.env.VITE_PUBLIC_PAGES === 'true';
 const publicDemoMode = import.meta.env.VITE_PUBLIC_DEMO_MODE === 'true';
 const clerkPubKey = publishableKeyFromHost(window.location.hostname, import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
+
+function clerkRoute(path: string) {
+  return publicPagesMode
+    ? `${window.location.origin}${basePath}/#${path}`
+    : `${basePath}${path}`;
+}
+
+function routeFromClerk(to: string) {
+  if (!publicPagesMode) return stripBase(to);
+  const target = new URL(to, window.location.href);
+  return target.hash.startsWith('#/') ? target.hash.slice(1) : stripBase(target.pathname);
+}
 
 type Sensor = { id: string; name: string; type: string; sensorId: string; animalId: string; normalMin: number; normalMax: number; thresholdsConfigured?: boolean; criticalMin?: number; criticalMax?: number; thingSpeakField: string; connectionStatus: 'planned' | 'connected' };
 type Cattle = { id: string; cattleId: string; name: string; breed: string; age: number };
@@ -160,7 +173,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <WouterRouter base={publicDemoMode ? '' : basePath} hook={publicDemoMode ? useHashLocation : undefined}>
+        <WouterRouter base={publicPagesMode ? '' : basePath} hook={publicPagesMode ? useHashLocation : undefined}>
           {publicDemoMode ? <AppRoutes publicDemo /> : <ClerkProviderWithRoutes />}
         </WouterRouter>
         <Toaster />
@@ -179,14 +192,14 @@ function ClerkProviderWithRoutes() {
     publishableKey={clerkPubKey}
     proxyUrl={clerkProxyUrl}
     appearance={clerkAppearance}
-    signInUrl={`${basePath}/sign-in`}
-    signUpUrl={`${basePath}/sign-up`}
+    signInUrl={clerkRoute('/sign-in')}
+    signUpUrl={clerkRoute('/sign-up')}
     localization={{
       signIn: { start: { title: 'Welcome back', subtitle: 'Sign in to your CattleCare workspace' } },
       signUp: { start: { title: 'Start your project', subtitle: 'Create a student farm workspace' } },
     }}
-    routerPush={(to) => setLocation(stripBase(to))}
-    routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
+    routerPush={(to) => setLocation(routeFromClerk(to))}
+    routerReplace={(to) => setLocation(routeFromClerk(to), { replace: true })}
   >
     <AppRoutes />
   </ClerkProvider>;
@@ -314,7 +327,7 @@ function Landing({ onDemo, demoOnly = false }: { onDemo: () => void; demoOnly?: 
             <div className="relative rounded-[26px] bg-[#f9f8f0] px-3 py-5 shadow-[0_18px_50px_rgba(40,66,43,.10)] sm:px-5">
               {demoOnly
                 ? <div className="py-8 text-center"><Leaf className="mx-auto text-[#527252]" size={28} /><h2 className="mt-4 font-serif text-2xl text-[#254333]">Explore the sample farm</h2><p className="mx-auto mt-2 max-w-xs text-sm leading-6 text-[#718073]">Try the dashboard, herd profiles, sensor mapping, and settings. Your changes stay in this browser.</p></div>
-                : <><SignIn routing="path" path={`${basePath}/`} signUpUrl={`${basePath}/sign-up`} /><div className="mx-auto mt-3 flex max-w-[440px] items-center justify-between border-t border-[#e6e9df] px-2 pt-4 text-xs"><Link href="/sign-in/forgot-password" className="font-semibold text-[#527252] hover:underline" data-testid="link-forgot-password">Forgot password?</Link><Link href="/sign-up" className="font-semibold text-[#315c42] hover:underline" data-testid="link-inline-sign-up">Create account</Link></div></>}
+                : <><SignIn routing={publicPagesMode ? 'hash' : 'path'} path={publicPagesMode ? undefined : `${basePath}/`} signUpUrl={clerkRoute('/sign-up')} /><div className="mx-auto mt-3 flex max-w-[440px] items-center justify-between border-t border-[#e6e9df] px-2 pt-4 text-xs"><Link href="/sign-in/forgot-password" className="font-semibold text-[#527252] hover:underline" data-testid="link-forgot-password">Forgot password?</Link><Link href="/sign-up" className="font-semibold text-[#315c42] hover:underline" data-testid="link-inline-sign-up">Create account</Link></div></>}
             </div>
             <p className="relative mt-4 text-center text-[10px] leading-4 text-[#668067]">No channel is assumed live until a ThingSpeak read succeeds.</p>
           </div>
@@ -326,10 +339,10 @@ function Landing({ onDemo, demoOnly = false }: { onDemo: () => void; demoOnly?: 
 }
 
 function SignInPage() {
-  return <AuthPage><SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} /></AuthPage>;
+  return <AuthPage><SignIn routing={publicPagesMode ? 'hash' : 'path'} path={publicPagesMode ? undefined : `${basePath}/sign-in`} signUpUrl={clerkRoute('/sign-up')} /></AuthPage>;
 }
 function SignUpPage() {
-  return <AuthPage><SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} /></AuthPage>;
+  return <AuthPage><SignUp routing={publicPagesMode ? 'hash' : 'path'} path={publicPagesMode ? undefined : `${basePath}/sign-up`} signInUrl={clerkRoute('/sign-in')} /></AuthPage>;
 }
 function AuthPage({ children }: { children: ReactNode }) {
   return <main className="grain flex min-h-[100dvh] flex-col items-center justify-center gap-5 bg-[#f1f0e6] px-4 py-8"><Link href="/" className="mb-1" data-testid="link-auth-home"><Brand /></Link><div className="w-full">{children}</div><p className="text-center text-xs text-[#7e8b7c]">CattleCare · student prototype workspace</p></main>;
@@ -360,7 +373,7 @@ function AuthenticatedAppFrame({ farm, children }: { farm: ReturnType<typeof use
   const logout = async () => {
     farm.setReadApiKey('');
     if (farm.demo) farm.leaveDemo();
-    else await signOut({ redirectUrl: basePath || '/' });
+    else await signOut({ redirectUrl: publicPagesMode ? `${window.location.origin}${basePath}/` : basePath || '/' });
   };
   return <AppFrameLayout farm={farm} onLogout={logout} userName={user?.firstName || (farm.demo ? 'Guest explorer' : 'Farm team')}>{children}</AppFrameLayout>;
 }
