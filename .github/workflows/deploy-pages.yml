@@ -36,6 +36,15 @@ jobs:
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
+      - name: Verify Clerk configuration
+        run: |
+          if [ -z "$VITE_CLERK_PUBLISHABLE_KEY" ]; then
+            echo "::error::Set VITE_CLERK_PUBLISHABLE_KEY as a repository Actions secret."
+            exit 1
+          fi
+        env:
+          VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.VITE_CLERK_PUBLISHABLE_KEY }}
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -44,6 +53,7 @@ jobs:
         env:
           PORT: "4173"
           BASE_PATH: /cattlefarm/
+          VITE_CLERK_PUBLISHABLE_KEY: ${{ secrets.VITE_CLERK_PUBLISHABLE_KEY }}
 
       - name: Prepare Pages artifact
         run: |
